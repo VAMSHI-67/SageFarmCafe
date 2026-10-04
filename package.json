@@ -1,0 +1,47 @@
+{
+  "name": "sage_farm_cafe",
+  "version": "1.0.0",
+  "description": "This repository contains the codebase for the immersive 3D showcase digital experience of Sage Farm Cafe, Hyderabad.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:setup": "node -r esbuild-register scripts/setup-turso.mjs"
+  },
+  "keywords": [
+    "sage-farm-cafe",
+    "nextjs",
+    "turso",
+    "libsql",
+    "threejs"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "@react-three/drei": "^9.114.6",
+    "@react-three/fiber": "^8.17.10",
+    "@types/three": "^0.160.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "fflate": "^0.8.3",
+    "framer-motion": "^13.4.6",
+    "lucide-react": "^1.48.0",
+    "next": "^14.2.15",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^3.7.0",
+    "three": "^0.160.0",
+    "three-stdlib": "^2.36.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3"
+  }
+}

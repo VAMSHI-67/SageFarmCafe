@@ -1,0 +1,275 @@
+import Database from 'better-sqlite3';
+import path from 'path';
+
+let dbInstance: any = null;
+
+function getDatabase() {
+  if (!dbInstance) {
+    const dbPath = path.join(process.cwd(), 'sage_cafe.db');
+    dbInstance = new Database(dbPath, { timeout: 10000 });
+    dbInstance.pragma('journal_mode = WAL');
+    initSchema(dbInstance);
+  }
+  return dbInstance;
+}
+
+function initSchema(db: any) {
+  // Initialize schema
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cafe_info (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      name TEXT NOT NULL,
+      tagline TEXT,
+      description TEXT,
+      address TEXT NOT NULL,
+      phone1 TEXT NOT NULL,
+      phone2 TEXT,
+      email TEXT,
+      opening_hours TEXT NOT NULL,
+      google_maps_url TEXT,
+      instagram_url TEXT,
+      max_party_size INTEGER DEFAULT 12,
+      slot_duration_minutes INTEGER DEFAULT 90,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS menu_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      description TEXT,
+      display_order INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS menu_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      price REAL NOT NULL,
+      is_veg INTEGER DEFAULT 1,
+      is_vegan INTEGER DEFAULT 0,
+      is_gluten_free INTEGER DEFAULT 0,
+      is_bestseller INTEGER DEFAULT 0,
+      is_available INTEGER DEFAULT 1,
+      image_url TEXT,
+      tags TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (category_id) REFERENCES menu_categories(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS gallery_images (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT,
+      caption TEXT,
+      image_url TEXT NOT NULL,
+      category TEXT DEFAULT 'ambience',
+      featured INTEGER DEFAULT 0,
+      display_order INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS reservations (
+      id TEXT PRIMARY KEY,
+      guest_name TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      email TEXT NOT NULL,
+      date TEXT NOT NULL,
+      time_slot TEXT NOT NULL,
+      guests_count INTEGER NOT NULL,
+      seating_preference TEXT DEFAULT 'Garden Courtyard',
+      special_requests TEXT,
+      status TEXT DEFAULT 'CONFIRMED',
+      internal_notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT DEFAULT 'ADMIN',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // Seed initial authentic Sage Farm Cafe data if empty
+  const cafeCount = db.prepare('SELECT COUNT(*) as count FROM cafe_info').get() as { count: number };
+  if (cafeCount.count === 0) {
+    db.prepare(`
+      INSERT INTO cafe_info (
+        id, name, tagline, description, address, phone1, phone2, email, opening_hours, google_maps_url, instagram_url, max_party_size, slot_duration_minutes
+      ) VALUES (
+        1,
+        'Sage Farm Cafe',
+        'Artisanal Organic Dining & Living Space',
+        'Rooted in sustainability and farm-to-fork mindfulness in Hyderabad. We harvest from our own organic farm (Sage Organics) to bring unadulterated botanical flavours, slow-fermented sourdoughs, and clean wholesome meals straight to your table.',
+        'Plot No. 1227, Road No. 12, MLA Colony, Banjara Hills / Jubilee Hills, Hyderabad, Telangana 500034, India',
+        '+91 99666 43073',
+        '+91 91777 91199',
+        'hello@sagefarmcafe.in',
+        'Daily: 10:30 AM – 10:30 PM',
+        'https://www.google.com/maps?q=sage+farm+cafe+hyderabad',
+        'https://www.instagram.com/sagefarmcafe',
+        12,
+        90
+      )
+    `).run();
+
+    // Seed Menu Categories
+    const insertCategory = db.prepare('INSERT INTO menu_categories (name, slug, description, display_order) VALUES (?, ?, ?, ?)');
+    const cat1 = insertCategory.run('Artisanal Sourdough Pizzas', 'sourdough-pizzas', 'Hand-stretched slow fermented 48-hr sourdough crusts with house cheese and organic farm toppings', 1).lastInsertRowid;
+    const cat2 = insertCategory.run('Farm Bowls & Fresh Greens', 'farm-bowls-greens', 'Vibrant harvests, microgreens, heritage grains, house-made dressings', 2).lastInsertRowid;
+    const cat3 = insertCategory.run('Artisanal Handcrafted Pastas', 'handmade-pastas', 'Freshly rolled pasta tossed in slow-cooked sauces and house herb pestos', 3).lastInsertRowid;
+    const cat4 = insertCategory.run('Probiotic Elixirs & Beverages', 'probiotics-beverages', 'In-house small batch brewed kombuchas, kefir tonics, cold press juices, and single-origin coffees', 4).lastInsertRowid;
+    const cat5 = insertCategory.run('Wholesome Farm Bakes & Desserts', 'farm-bakes', 'Refined-sugar-free and gluten-free sweet indulgences sweetened with raw palm jaggery and dates', 5).lastInsertRowid;
+
+    // Seed Menu Items
+    const insertItem = db.prepare(`
+      INSERT INTO menu_items (
+        category_id, name, description, price, is_veg, is_vegan, is_gluten_free, is_bestseller, image_url, tags
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    // Pizzas
+    insertItem.run(
+      cat1,
+      'Burrata & Heirloom Roasted Tomato Sourdough',
+      'Locally churned whole milk burrata, slow-roasted heirloom farm tomatoes, organic Genovese basil coulis, and cold-pressed garlic oil.',
+      680, 1, 0, 0, 1,
+      'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?q=80&w=1000&auto=format&fit=crop',
+      'Signature,Organic,48hr Ferment'
+    );
+    insertItem.run(
+      cat1,
+      'Wild Forest Mushroom & Truffled Ricotta Pizza',
+      'Sauteed seasonal foraged wild mushrooms, house-made lemon ricotta, fresh thyme, caramelized shallots, microgreens.',
+      720, 1, 0, 0, 1,
+      'https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=1000&auto=format&fit=crop',
+      'Vegetarian,Artisanal'
+    );
+    insertItem.run(
+      cat1,
+      'Farm Herb Pesto & Smoked Cottage Cheese',
+      'Hand-pounded walnut sage pesto, house-smoked paneer cubes, sun-dried cherry tomatoes, fresh baby rocket.',
+      640, 1, 0, 0, 0,
+      'https://images.unsplash.com/photo-1593560708920-61dd98c46a4e?q=80&w=1000&auto=format&fit=crop',
+      'Farm Pesto'
+    );
+
+    // Bowls
+    insertItem.run(
+      cat2,
+      'Sage Harvest Nourish Bowl',
+      'Warm organic foxtail millet, roasted spiced sweet potato, pickled purple cabbage, avocado slices, sprouted mung, toasted pumpkin seeds, tahini-turmeric emulsion.',
+      520, 1, 1, 1, 1,
+      'https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=1000&auto=format&fit=crop',
+      'Vegan,Gluten-Free,Superfood'
+    );
+    insertItem.run(
+      cat2,
+      'Citrus Burrata & Micro-Greens Salad',
+      'Living farm greens, blood orange segments, candied walnuts, edible calendula flowers, dressed in raw honey-lemon reduction.',
+      560, 1, 0, 1, 1,
+      'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=1000&auto=format&fit=crop',
+      'Organic Greens,Refreshing'
+    );
+
+    // Pastas
+    insertItem.run(
+      cat3,
+      'Hand-Rolled Gnocchi in Brown Butter & Sage',
+      'Pillow-soft potato gnocchi seared in cultured butter infused with garden sage leaves, toasted hazelnuts, and shaved aged Parmesan.',
+      620, 1, 0, 0, 1,
+      'https://images.unsplash.com/photo-1551183053-bf91a1d81141?q=80&w=1000&auto=format&fit=crop',
+      'Classic,Garden Sage'
+    );
+    insertItem.run(
+      cat3,
+      'Spinach & Cashew Cream Tagliatelle',
+      'House-made ribbon pasta tossed in velvet cashew emulsion, blistered capers, garden baby spinach, and lemon zest.',
+      590, 1, 1, 0, 0,
+      'https://images.unsplash.com/photo-1621996346565-e3d5d6281691?q=80&w=1000&auto=format&fit=crop',
+      'Vegan'
+    );
+
+    // Probiotics & Drinks
+    insertItem.run(
+      cat4,
+      'Hibiscus & Wild Rose Botanical Kombucha',
+      'Small-batch live fermented organic green tea infused with dried hibiscus petals and fragrant desi rose.',
+      280, 1, 1, 1, 1,
+      'https://images.unsplash.com/photo-1556881286-fc6915169721?q=80&w=1000&auto=format&fit=crop',
+      'Live Probiotics,In-House'
+    );
+    insertItem.run(
+      cat4,
+      'Sage Farm Specialty Pour-Over Coffee',
+      'Single-estate shade-grown Arabica from Araku Valley, brewed manually with notes of caramelized citrus and dark cocoa.',
+      260, 1, 1, 1, 1,
+      'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?q=80&w=1000&auto=format&fit=crop',
+      'Specialty Coffee,Single Estate'
+    );
+
+    // Desserts
+    insertItem.run(
+      cat5,
+      'Raw Cacao & Sea Salt Tart',
+      'Almond-flour crust with single-origin Indian raw cacao ganache, sweetened with organic Medjool dates and flaked mineral salt.',
+      420, 1, 1, 1, 1,
+      'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?q=80&w=1000&auto=format&fit=crop',
+      'Gluten-Free,Refined Sugar Free'
+    );
+
+    // Seed Gallery Images
+    const insertGallery = db.prepare('INSERT INTO gallery_images (title, caption, image_url, category, featured, display_order) VALUES (?, ?, ?, ?, ?, ?)');
+    insertGallery.run(
+      'Sunlit Rustic Courtyard',
+      'Natural daylight filtering through tree canopies over our outdoor stone tables',
+      'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=1200&auto=format&fit=crop',
+      'ambience', 1, 1
+    );
+    insertGallery.run(
+      'Wood-Fired Artisanal Bakes',
+      'Our daily batch of wild-yeast sourdough loaves and crisp crusts fresh from the hearth',
+      'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1200&auto=format&fit=crop',
+      'food', 1, 2
+    );
+    insertGallery.run(
+      'The Living Botanical Corner',
+      'Potted herbs and organic plant nursery integrated into the cafe dining spaces',
+      'https://images.unsplash.com/photo-1525610553991-2bede1a236e2?q=80&w=1200&auto=format&fit=crop',
+      'ambience', 1, 3
+    );
+    insertGallery.run(
+      'Morning Specialty Pour-Over',
+      'Carefully dialed-in Araku valley single-origin coffee brewing at the espresso bar',
+      'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=1200&auto=format&fit=crop',
+      'drinks', 1, 4
+    );
+    insertGallery.run(
+      'Farm Harvest Plating',
+      'Edible flowers, freshly pulled microgreens, and seasonal organic vegetable bowls',
+      'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=1200&auto=format&fit=crop',
+      'food', 1, 5
+    );
+
+    // Seed Admin
+    db.prepare(`
+      INSERT OR IGNORE INTO admin_users (username, password_hash, role)
+      VALUES ('admin', 'admin123', 'ADMIN')
+    `).run();
+  }
+}
+
+const db: any = new Proxy({}, {
+  get: (_, prop: string) => {
+    const instance = getDatabase();
+    const value = instance[prop];
+    return typeof value === 'function' ? value.bind(instance) : value;
+  }
+});
+
+export default db;

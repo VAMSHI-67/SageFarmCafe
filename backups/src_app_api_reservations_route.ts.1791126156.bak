@@ -1,0 +1,69 @@
+import { NextResponse } from 'next/server';
+import db from '@/lib/db';
+
+export async function GET() {
+  try {
+    const reservations = db.prepare('SELECT * FROM reservations ORDER BY created_at DESC').all();
+    return NextResponse.json({ reservations });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { guest_name, phone, email, date, time_slot, guests_count, seating_preference, special_requests } = body;
+
+    if (!guest_name || !phone || !email || !date || !time_slot || !guests_count) {
+      return NextResponse.json({ error: 'All primary reservation fields are required.' }, { status: 400 });
+    }
+
+    const reservationId = `SFC-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    const stmt = db.prepare(`
+      INSERT INTO reservations (
+        id, guest_name, phone, email, date, time_slot, guests_count, seating_preference, special_requests, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      reservationId,
+      guest_name,
+      phone,
+      email,
+      date,
+      time_slot,
+      guests_count,
+      seating_preference || 'Garden Courtyard',
+      special_requests || '',
+      'CONFIRMED'
+    );
+
+    const created = db.prepare('SELECT * FROM reservations WHERE id = ?').get(reservationId);
+    return NextResponse.json({ success: true, reservation: created });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    const body = await req.json();
+    const { id, status, internal_notes } = body;
+
+    if (!id || !status) {
+      return NextResponse.json({ error: 'Missing ID or status' }, { status: 400 });
+    }
+
+    db.prepare('UPDATE reservations SET status = ?, internal_notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
+      status,
+      internal_notes || '',
+      id
+    );
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
